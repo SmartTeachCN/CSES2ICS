@@ -1,2 +1,3 @@
 git+https://ghfast.top/https://github.com/SmartTeachCN/pycses.git
 icalendar
+pathlib

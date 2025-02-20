@@ -25,7 +25,7 @@ def calc_start_end_CN():
         start_date = datetime.date(now.year, 2, 1)
         end_date = datetime.date(now.year, 7, 31)
 
-    return find_first_monday(start_date), end_date
+    return start_date, end_date
 
 def get_date_time_with_offset(start_date, time, offset):
     #FIXME: time sometimes become int, dirty fix that.
@@ -34,14 +34,23 @@ def get_date_time_with_offset(start_date, time, offset):
     time = datetime.datetime.strptime(time, '%H:%M:%S').time()
     return datetime.datetime.combine(start_date, time) + datetime.timedelta(days=offset)
 
+def new_event(class_obj, subjects, start_date, location, interval):
+    current_event = Event()
+    current_event.add('summary', vText(class_obj["subject"]))
+    current_event.add('dtstart', get_date_time_with_offset(start_date, class_obj["start_time"], i-1))
+    current_event.add('dtend', get_date_time_with_offset(start_date, class_obj["end_time"], i-1))
+    current_event.add('location', vText(location))
+    current_event.add('rrule', {'freq': 'weekly', 'interval': interval})
+    return current_event
+
 def main():
     parser = argparse.ArgumentParser(description='Class schedule generator.')
     parser.add_argument('--calendar-start-date', type=str, help='Calendar start date (YYYY-MM-DD)')
     parser.add_argument('--calendar-end-date', type=str, help='Calendar end date (YYYY-MM-DD)')
+    parser.add_argument('--use-teacher-as-location', type=bool, help='Use teacher as location', default=True)
     #parser.add_argument('--ignore-start-time', type=str, help='Ignore timespan start (HH:MM)')
     #parser.add_argument('--ignore-end-time', type=str, help='Ignore timespan end (HH:MM)')
     #parser.add_argument('--ignore-class-names', type=str, help='Comma-separated list of class names to ignore')
-    parser.add_argument('--start-time', type=str, help='Single week start time in ISO format')
     parser.add_argument('--output-filename', type=str, help='Output filename', default='schedule.ics')
     parser.add_argument('profile', nargs='?', help='CSES filename as a positional argument')
     args = parser.parse_args()
@@ -64,26 +73,8 @@ def main():
     # Load Schedule
     schedules = parser.get_schedules()
     logging.debug("Subjects: %s", raw_subjects)
-    # Get subjects
-    for subject in parser.get_subjects():
-        print("Name:", subject["name"])
-        print("Simplified Name:", subject["simplified_name"])
-        print("Teacher:", subject["teacher"])
-        print("Room:", subject["room"])
-        print("")
+    logging.debug("Schedules: %s", schedules)
 
-    # Get schedules
-    for schedule in parser.get_schedules():
-        print("Name:", schedule["name"])
-        print("Enable Day:", schedule["enable_day"])
-        print("Weeks:", schedule["weeks"])
-        print("Classes:")
-        for class_ in schedule["classes"]:
-            print("  Subject:", class_["subject"])
-            print("  Start Time:", class_["start_time"])
-            print("  End Time:", class_["end_time"])
-        print("")
-    
     # Make subjects a dict with name as key
     subjects = {subject["name"]: subject for subject in raw_subjects}
 
@@ -93,6 +84,7 @@ def main():
         start_date = find_first_monday(datetime.datetime.strptime(args.calendar_start_date, '%Y-%m-%d').date())
     if args.calendar_end_date:
         end_date = datetime.datetime.strptime(args.calendar_end_date, '%Y-%m-%d').date()
+    start_date_monday = find_first_monday(start_date)
 
     profile_name = Path(profile_path).stem
     # Create Calendar
@@ -135,26 +127,17 @@ def main():
     for i in range(1,8):
         current_schedule = days[i-1]
         for class_ in current_schedule['classes']:
-            current_event = Event()
-            current_event.add('summary', vText(class_["subject"]))
-            current_event.add('dtstart', get_date_time_with_offset(start_date, class_["start_time"], i-1))
-            current_event.add('dtend', get_date_time_with_offset(start_date, class_["end_time"], i-1))
-            current_event.add('location', vText(subjects[class_["subject"]]['teacher']))
-            current_event.add('rrule', {'freq': 'weekly', 'interval': 1 if dedup_days[i-1] else 2})
+            current_event = new_event(class_, subjects, start_date_monday, subjects[class_["subject"]]['teacher'] if args.use_teacher_as_location else subjects[class_["subject"]]['room'], 1 if dedup_days[i-1] else 2)
             cal.add_component(current_event)
     for i in range(8,15):
         if dedup_days[i-8]:
             continue
         current_schedule = days[i-1]
         for class_ in current_schedule['classes']:
-            current_event = Event()
-            current_event.add('summary', vText(class_["subject"]))
-            current_event.add('dtstart', get_date_time_with_offset(start_date, class_["start_time"], i-1))
-            current_event.add('dtend', get_date_time_with_offset(start_date, class_["end_time"], i-1))
-            current_event.add('location', vText(subjects[class_["subject"]]['teacher']))
-            current_event.add('rrule', {'freq': 'weekly', 'interval': 2})
+            current_event = new_event(class_, subjects, start_date_monday, subjects[class_["subject"]]['teacher'] if args.use_teacher_as_location else subjects[class_["subject"]]['room'], 2)
             cal.add_component(current_event)
     
+    logging.info("Phase 3: Output file")
     output_file = args.output_filename
     with open(output_file, 'wb') as f:
         f.write(cal.to_ical())
