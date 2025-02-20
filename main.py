@@ -28,6 +28,9 @@ def calc_start_end_CN():
     return find_first_monday(start_date), end_date
 
 def get_date_time_with_offset(start_date, time, offset):
+    #FIXME: time sometimes become int, dirty fix that.
+    if type(time) == int:
+        time = datetime.time(hour=time // 3600, minute=(time % 3600) // 60, second=time % 60).strftime('%H:%M:%S')
     time = datetime.datetime.strptime(time, '%H:%M:%S').time()
     return datetime.datetime.combine(start_date, time) + datetime.timedelta(days=offset)
 
@@ -117,20 +120,32 @@ def main():
         current_day_even_schedules = [s for s in even_schedules if s["enable_day"] == i+1]
         if not current_day_all_schedules and not current_day_odd_schedules and not current_day_even_schedules:
             continue
-        if not current_day_odd_schedules and not current_day_even_schedules:
-            days[i] = current_day_all_schedules
-            days[i+7] = current_day_all_schedules
+        elif not current_day_odd_schedules and not current_day_even_schedules:
+            days[i] = current_day_all_schedules[-1]
+            days[i+7] = current_day_all_schedules[-1]
             dedup_days[i] = True
             continue
-        elif not current_day_all_schedules:
-            days[i] = current_day_odd_schedules
-            days[i+7] = current_day_even_schedules
+        else:
+            days[i] = current_day_odd_schedules[-1] if len(current_day_odd_schedules)>0 else current_day_all_schedules[-1]
+            days[i+7] = current_day_even_schedules[-1] if len(current_day_even_schedules)>0 else current_day_all_schedules[-1]
             continue
     
     logging.info("Phase 2: Fill events")
     print(days)
-    for i in range(1,15):
-        current_schedule = days[i-1][0]
+    for i in range(1,8):
+        current_schedule = days[i-1]
+        for class_ in current_schedule['classes']:
+            current_event = Event()
+            current_event.add('summary', vText(class_["subject"]))
+            current_event.add('dtstart', get_date_time_with_offset(start_date, class_["start_time"], i-1))
+            current_event.add('dtend', get_date_time_with_offset(start_date, class_["end_time"], i-1))
+            current_event.add('location', vText(subjects[class_["subject"]]['teacher']))
+            current_event.add('rrule', {'freq': 'weekly', 'interval': 1 if dedup_days[i-1] else 2})
+            cal.add_component(current_event)
+    for i in range(8,15):
+        if dedup_days[i-8]:
+            continue
+        current_schedule = days[i-1]
         for class_ in current_schedule['classes']:
             current_event = Event()
             current_event.add('summary', vText(class_["subject"]))
