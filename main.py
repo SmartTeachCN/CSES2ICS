@@ -1,11 +1,10 @@
 import logging
 import argparse
-
-import datetime
 from pathlib import Path
+import datetime
 
 import cses
-from icalendar import Calendar, Event, vText
+from icalendar import Calendar, Event, vText, vDatetime
 
 def find_first_monday(start_date):
     while start_date.weekday() != 0:  # 0 represents Monday
@@ -34,11 +33,11 @@ def get_date_time_with_offset(start_date, time, offset):
     time = datetime.datetime.strptime(time, '%H:%M:%S').time()
     return datetime.datetime.combine(start_date, time) + datetime.timedelta(days=offset)
 
-def new_event(class_obj, subjects, start_date, location, interval):
+def new_event(class_obj, start_date, offset, location, interval):
     current_event = Event()
     current_event.add('summary', vText(class_obj["subject"]))
-    current_event.add('dtstart', get_date_time_with_offset(start_date, class_obj["start_time"], i-1))
-    current_event.add('dtend', get_date_time_with_offset(start_date, class_obj["end_time"], i-1))
+    current_event.add('dtstart', vDatetime(get_date_time_with_offset(start_date, class_obj["start_time"], offset)))
+    current_event.add('dtend', vDatetime(get_date_time_with_offset(start_date, class_obj["end_time"], offset)))
     current_event.add('location', vText(location))
     current_event.add('rrule', {'freq': 'weekly', 'interval': interval})
     return current_event
@@ -87,13 +86,14 @@ def main():
     start_date_monday = find_first_monday(start_date)
 
     profile_name = Path(profile_path).stem
+    logging.info("Generating calendar for %s", profile_name)
     # Create Calendar
     cal = Calendar()
     cal.add('prodid', '-//CSES2ICS//cses//')
     cal.add('version', '2.0')
     cal.add('summary', vText(f'CSES iCalendar {profile_name}'))
-    cal.add('dtstart', start_date)
-    cal.add('dtend', end_date)
+    cal.add('dtstart', vDatetime(start_date))
+    cal.add('dtend', vDatetime(end_date))
 
     # Create Events
     # Create an array of length 14, each element is a list of events for that day
@@ -127,14 +127,14 @@ def main():
     for i in range(1,8):
         current_schedule = days[i-1]
         for class_ in current_schedule['classes']:
-            current_event = new_event(class_, subjects, start_date_monday, subjects[class_["subject"]]['teacher'] if args.use_teacher_as_location else subjects[class_["subject"]]['room'], 1 if dedup_days[i-1] else 2)
+            current_event = new_event(class_, start_date_monday, i-1, subjects[class_["subject"]]['teacher'] if args.use_teacher_as_location else subjects[class_["subject"]]['room'], 1 if dedup_days[i-1] else 2)
             cal.add_component(current_event)
     for i in range(8,15):
         if dedup_days[i-8]:
             continue
         current_schedule = days[i-1]
         for class_ in current_schedule['classes']:
-            current_event = new_event(class_, subjects, start_date_monday, subjects[class_["subject"]]['teacher'] if args.use_teacher_as_location else subjects[class_["subject"]]['room'], 2)
+            current_event = new_event(class_, start_date_monday, i-1, subjects[class_["subject"]]['teacher'] if args.use_teacher_as_location else subjects[class_["subject"]]['room'], 2)
             cal.add_component(current_event)
     
     logging.info("Phase 3: Output file")
