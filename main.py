@@ -71,7 +71,7 @@ def main():
     parser.add_argument('--use-teacher-as-location', type=bool, help='Use teacher as location', default=True)
     #parser.add_argument('--ignore-start-time', type=str, help='Ignore timespan start (HH:MM)')
     #parser.add_argument('--ignore-end-time', type=str, help='Ignore timespan end (HH:MM)')
-    #parser.add_argument('--ignore-class-names', type=str, help='Comma-separated list of class names to ignore')
+    parser.add_argument('--ignore-class-names', type=str, help='Comma-separated list of class names to ignore')
     parser.add_argument('--output-filename', type=str, help='Output filename', default='schedule.ics')
     parser.add_argument('profile', nargs='?', help='CSES filename as a positional argument')
     args = parser.parse_args()
@@ -124,6 +124,9 @@ def main():
     cal.add('dtstart', vDatetime(start_date))
     cal.add('dtend', vDatetime(end_date))
 
+    # Prepare ignore lists
+    ignore_class_names = args.ignore_class_names.split(',') if args.ignore_class_names else []
+
     # Create Events
     # Create an array of length 14, each element is a list of events for that day
     days = [None for _ in range(14)]
@@ -156,6 +159,8 @@ def main():
     for i in range(1,8):
         current_schedule = days[i-1]
         for class_ in current_schedule['classes']:
+            if class_["subject"] in ignore_class_names:
+                continue
             current_event = new_event(class_, start_date_monday, i-1, subjects[class_["subject"]]['teacher'] if args.use_teacher_as_location else subjects[class_["subject"]]['room'], 1 if dedup_days[i-1] else 2)
             cal.add_component(current_event)
     for i in range(8,15):
@@ -163,6 +168,8 @@ def main():
             continue
         current_schedule = days[i-1]
         for class_ in current_schedule['classes']:
+            if class_["subject"] in ignore_class_names:
+                continue
             current_event = new_event(class_, start_date_monday, i-1, subjects[class_["subject"]]['teacher'] if args.use_teacher_as_location else subjects[class_["subject"]]['room'], 2)
             cal.add_component(current_event)
     
