@@ -2,27 +2,48 @@ import logging
 import argparse
 from pathlib import Path
 import datetime
+from zoneinfo import ZoneInfo
 
 import cses
 from icalendar import Calendar, Event, vText, vDatetime
 
 def find_first_monday(start_date):
+    # 如果输入是 date 对象，转换为 datetime
+    if isinstance(start_date, datetime.date) and not isinstance(start_date, datetime.datetime):
+        start_date = datetime.datetime.combine(start_date, datetime.time())
+    
     while start_date.weekday() != 0:  # 0 represents Monday
         start_date += datetime.timedelta(days=1)
     return start_date
 
-def calc_start_end_CN():
-    now = datetime.datetime.now()
+def calc_start_end_CN(tz):
+    now = datetime.datetime.now(tz=tz)
     month = now.month
 
     if 9 <= month <= 12 or 1 <= month <= 2:
         # Term 1 (September to January)
-        start_date = datetime.date(now.year if month >= 9 else now.year - 1, 9, 1)
-        end_date = datetime.date(now.year + 1 if month >= 9 else now.year, 1, 31)
+        start_date = datetime.datetime(
+            now.year if month >= 9 else now.year - 1, 
+            9, 1, 
+            tzinfo=tz
+        )
+        end_date = datetime.datetime(
+            now.year + 1 if month >= 9 else now.year, 
+            1, 31, 23, 59, 59,  # 设置为当天的最后一秒
+            tzinfo=tz
+        )
     else:
         # Term 2 (March to July)
-        start_date = datetime.date(now.year, 2, 1)
-        end_date = datetime.date(now.year, 7, 31)
+        start_date = datetime.datetime(
+            now.year, 
+            2, 1, 
+            tzinfo=tz
+        )
+        end_date = datetime.datetime(
+            now.year, 
+            7, 31, 23, 59, 59,  # 设置为当天的最后一秒
+            tzinfo=tz
+        )
 
     return start_date, end_date
 
@@ -44,6 +65,7 @@ def new_event(class_obj, start_date, offset, location, interval):
 
 def main():
     parser = argparse.ArgumentParser(description='Class schedule generator.')
+    parser.add_argument('--timezone', type=str, help='Calendar timezone', default='Asia/Shanghai')
     parser.add_argument('--calendar-start-date', type=str, help='Calendar start date (YYYY-MM-DD)')
     parser.add_argument('--calendar-end-date', type=str, help='Calendar end date (YYYY-MM-DD)')
     parser.add_argument('--use-teacher-as-location', type=bool, help='Use teacher as location', default=True)
@@ -77,12 +99,19 @@ def main():
     # Make subjects a dict with name as key
     subjects = {subject["name"]: subject for subject in raw_subjects}
 
+    # Prepare Timezone
+    tz = ZoneInfo(args.timezone)
+
     # Declare start and end date
-    start_date, end_date = calc_start_end_CN()
+    start_date, end_date = calc_start_end_CN(tz)
     if args.calendar_start_date:
-        start_date = find_first_monday(datetime.datetime.strptime(args.calendar_start_date, '%Y-%m-%d').date())
+        start_date = find_first_monday(
+            datetime.datetime.strptime(args.calendar_start_date, '%Y-%m-%d').replace(tzinfo=tz)
+        )
     if args.calendar_end_date:
-        end_date = datetime.datetime.strptime(args.calendar_end_date, '%Y-%m-%d').date()
+        end_date = datetime.datetime.strptime(
+            args.calendar_end_date, '%Y-%m-%d'
+        ).replace(hour=23, minute=59, second=59, tzinfo=tz)
     start_date_monday = find_first_monday(start_date)
 
     profile_name = Path(profile_path).stem
