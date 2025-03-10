@@ -60,7 +60,10 @@ def new_event(class_obj, start_date, offset, location, interval):
     current_event.add('dtstart', vDatetime(get_date_time_with_offset(start_date, class_obj["start_time"], offset)))
     current_event.add('dtend', vDatetime(get_date_time_with_offset(start_date, class_obj["end_time"], offset)))
     current_event.add('location', vText(location))
-    current_event.add('rrule', {'freq': 'weekly', 'interval': interval})
+    if interval > 1:
+        current_event.add('rrule', {'freq': 'weekly', 'interval': interval})
+    else:
+        current_event.add('rrule', {'freq': 'weekly'})
     return current_event
 
 def main():
